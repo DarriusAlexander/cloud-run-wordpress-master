@@ -84,7 +84,7 @@ RUN apt-get update && apt-get -y install net-tools wget && \
 # custom entrypoint
 COPY wordpress/cloud-run-entrypoint.sh /usr/local/bin/
 
-EXPOSE 8080
+EXPOSE 8080 8443
 # Use the PORT environment variable in Apache configuration files.
 RUN sed -i 's/80/${PORT}/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
 
