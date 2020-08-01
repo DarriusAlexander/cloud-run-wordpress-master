@@ -1,46 +1,23 @@
 #!/bin/bash
 
-. /opt/bitnami/base/functions
+# shellcheck disable=SC1091
 
-if [[ -d /docker-entrypoint-init.d ]] && [[ ! -f /bitnami/"$BITNAMI_APP_NAME"/.user_scripts_initialized ]]; then
-    for f in /docker-entrypoint-init.d/*; do
-        failure=0
-        case "$f" in
-            *.sh)
-                if [[ -x "$f" ]]; then
-                    info "Executing $f"; "$f" || failure=$?
-                else
-                    info "Sourcing $f"; . "$f"
-                fi
-                ;;
+set -o errexit
+set -o nounset
+set -o pipefail
+# set -o xtrace # Uncomment this line for debugging purposes
 
-            *.php)
-                info "Executing $f with PHP interpreter"
-                php "$f" || failure=$?
-                ;;
+# Only execute init scripts once
+if [[ ! -f "/bitnami/wordpress/.user_scripts_initialized" && -d "/docker-entrypoint-init.d" ]]; then
+    read -r -a init_scripts <<< "$(find "/docker-entrypoint-init.d" -type f -print0 | xargs -0)"
+    if [[ "${#init_scripts[@]}" -gt 0 ]] && [[ ! -f "/bitnami/wordpress/.user_scripts_initialized" ]]; then
+        mkdir -p "/bitnami/wordpress"
+        for init_script in "${init_scripts[@]}"; do
+            for init_script_type_handler in /post-init.d/*.sh; do
+                "$init_script_type_handler" "$init_script"
+            done
+        done
+    fi
 
-            *.sql|*.sql.gz)
-                info "Executing $f"
-                mysql_cmd=( mysql -h "$MARIADB_HOST" -P "$MARIADB_PORT_NUMBER" -u "$MARIADB_ROOT_USER" )
-                if [[ "${ALLOW_EMPTY_PASSWORD:-no}" != "yes" ]]; then
-                    mysql_cmd+=( -p"$MARIADB_ROOT_PASSWORD" )
-                fi
-                if [[ "$f" == *".sql" ]]; then
-                    "${mysql_cmd[@]}" < "$f" || failure=$?
-                elif [[ "$f" == *".sql.gz" ]]; then
-                    gunzip -c "$f" | "${mysql_cmd[@]}" || failure=$?
-                fi
-                ;;
-
-            *)
-                info "Ignoring $f"
-                ;;
-        esac
-        if [[ "$failure" -ne 0 ]]; then
-            error "Failed to execute $f"
-            exit "$failure"
-        fi
-    done
-    info "Custom scripts were executed"
-    touch /bitnami/"$BITNAMI_APP_NAME"/.user_scripts_initialized
+    touch "/bitnami/wordpress/.user_scripts_initialized"
 fi

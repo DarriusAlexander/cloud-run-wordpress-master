@@ -177,7 +177,7 @@ fi
 # in overlayfs when using tar. Install bsdtar in the container image
 # to workaround it. As the overhead is too big (~40 MB), it is not added by
 # default. Source: https://github.com/coreos/bugs/issues/1095
-if which bsdtar > /dev/null; then
+if which bsdtar >/dev/null 2>&1; then
   bsdtar -xf $PACKAGE.tar.gz
 else
   tar xzf $PACKAGE.tar.gz
@@ -187,7 +187,16 @@ case "$1" in
   install) info "Installing $PACKAGE" ;;
   unpack) info "Unpacking $PACKAGE" ;;
 esac
+
 nami $1 $PACKAGE $PACKAGE_ARGS
+
+if [[ $PACKAGE =~ git-.* ]]; then
+  # Due to a nami unpack issue, git binaries are copied instead of using hard symlinks.
+  # This workaround overwrites these binaries with the original ones, preserving links
+  # and saving ~500 MB
+  info "Patching ${PACKAGE}"
+  cp -a --force "${INSTALL_ROOT}/${PACKAGE}/files/git/." "/opt/bitnami/git"
+fi
 
 rm -rf $INSTALL_ROOT
 
@@ -205,7 +214,7 @@ if [ "$BITNAMI_PKG_CHMOD" ]; then
   fi
   # We need to be in $HOME in order to nami inspect works
   cd $HOME
-  DIRS+=" $(nami inspect $PACKAGE_NAME | grep -e 'installdir' | cut -f4 -d\")"
+  DIRS+=" $(nami inspect $PACKAGE_NAME | grep -e '"installdir"' | cut -f4 -d\")"
   info "Fixing permissions: chmod $BITNAMI_PKG_CHMOD $DIRS"
   chmod $BITNAMI_PKG_CHMOD $DIRS
 fi

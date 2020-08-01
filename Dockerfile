@@ -5,6 +5,7 @@ ENV BITNAMI_PKG_CHMOD="-R g+rwX" \
     HOME="/" \
     PATH="/opt/bitnami/php/bin:/opt/bitnami/php/sbin:/opt/bitnami/apache/bin:/opt/bitnami/wp-cli/bin:/opt/bitnami/mysql/bin:/opt/bitnami/common/bin:/opt/bitnami/nami/bin:$PATH"
 
+
 COPY prebuildfs /
 # Install required system packages and dependencies
 RUN install_packages ca-certificates curl gzip libaudit1 libbsd0 libbz2-1.0 libc6 libcap-ng0 libcom-err2 libcurl4 libexpat1 libffi6 libfftw3-double3 libfontconfig1 libfreetype6 libgcc1 libgcrypt20 libglib2.0-0 libgmp10 libgnutls30 libgomp1 libgpg-error0 libgssapi-krb5-2 libhogweed4 libicu63 libidn2-0 libjemalloc2 libjpeg62-turbo libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0 liblcms2-2 libldap-2.4-2 liblqr-1-0 libltdl7 liblzma5 libmagickcore-6.q16-6 libmagickwand-6.q16-6 libmcrypt4 libmemcached11 libmemcachedutil2 libncurses6 libnettle6 libnghttp2-14 libonig5 libp11-kit0 libpam0g libpcre3 libpng16-16 libpq5 libpsl5 libreadline7 librtmp1 libsasl2-2 libsqlite3-0 libssh2-1 libssl1.1 libstdc++6 libsybdb5 libtasn1-6 libtidy5deb1 libtinfo6 libunistring2 libuuid1 libx11-6 libxau6 libxcb1 libxdmcp6 libxext6 libxml2 libxslt1.1 libzip4 procps sudo tar unzip zlib1g
@@ -20,16 +21,19 @@ RUN bitnami-pkg install tini-0.19.0-0 --checksum 9a8ae20be31a518f042fcec359f2cf3
 RUN bitnami-pkg install gosu-1.12.0-1 --checksum 51cfb1b7fd7b05b8abd1df0278c698103a9b1a4964bdacd87ca1d5c01631d59c
 RUN apt-get update && apt-get upgrade -y && \
     rm -r /var/lib/apt/lists /var/cache/apt/archives /opt/bitnami/wordpress/wp-content
-RUN /build/install-gosu.sh
-RUN /build/install-tini.sh
+    
 RUN ln -sf /dev/stdout /opt/bitnami/apache/logs/access_log && \
     ln -sf /dev/stderr /opt/bitnami/apache/logs/error_log
 
 COPY rootfs /
 RUN bash download-extra.sh
+
 ENV ALLOW_EMPTY_PASSWORD="no" \
+    APACHE_ENABLE_CUSTOM_PORTS="no" \
+    APACHE_HTTPS_PORT_NUMBER="8443" \
+    APACHE_HTTP_PORT_NUMBER="8080" \
     BITNAMI_APP_NAME="wordpress" \
-    BITNAMI_IMAGE_VERSION="5.3.2-debian-10-r5" \
+    BITNAMI_IMAGE_VERSION="5.4.2-debian-10-r41" \
     MARIADB_HOST="mariadb" \
     MARIADB_PORT_NUMBER="3306" \
     MARIADB_ROOT_PASSWORD="" \
@@ -38,28 +42,39 @@ ENV ALLOW_EMPTY_PASSWORD="no" \
     MYSQL_CLIENT_CREATE_DATABASE_PASSWORD="" \
     MYSQL_CLIENT_CREATE_DATABASE_PRIVILEGES="ALL" \
     MYSQL_CLIENT_CREATE_DATABASE_USER="" \
+    MYSQL_CLIENT_ENABLE_SSL="no" \
+    MYSQL_CLIENT_SSL_CA_FILE="" \
+    NAMI_PREFIX="/.nami" \
+    OS_ARCH="amd64" \
+    OS_FLAVOUR="debian-10" \
+    OS_NAME="linux" \
+    PHP_MEMORY_LIMIT="256M" \
     SMTP_HOST="" \
     SMTP_PASSWORD="" \
     SMTP_PORT="" \
     SMTP_PROTOCOL="" \
     SMTP_USER="" \
     SMTP_USERNAME="" \
-    WORDPRESS_BLOG_NAME="Full Stack Brands" \
+    WORDPRESS_BLOG_NAME="User's Blog!" \
     WORDPRESS_DATABASE_NAME="bitnami_wordpress" \
     WORDPRESS_DATABASE_PASSWORD="" \
     WORDPRESS_DATABASE_SSL_CA_FILE="" \
     WORDPRESS_DATABASE_USER="bn_wordpress" \
     WORDPRESS_EMAIL="user@example.com" \
+    WORDPRESS_EXTRA_WP_CONFIG_CONTENT="" \
     WORDPRESS_FIRST_NAME="FirstName" \
     WORDPRESS_HTACCESS_OVERRIDE_NONE="yes" \
-    WORDPRESS_HTTPS_PORT="443" \
-    WORDPRESS_HTTP_PORT="80" \
-    WORDPRESS_LAST_NAME="Alexander" \
+    WORDPRESS_HTACCESS_PERSISTENCE_ENABLED="no" \
+    WORDPRESS_HTTPS_PORT="8443" \
+    WORDPRESS_HTTP_PORT="8080" \
+    WORDPRESS_LAST_NAME="LastName" \
     WORDPRESS_PASSWORD="bitnami" \
+    WORDPRESS_RESET_DATA_PERMISSIONS="no" \
     WORDPRESS_SCHEME="http" \
     WORDPRESS_SKIP_INSTALL="no" \
     WORDPRESS_TABLE_PREFIX="wp_" \
     WORDPRESS_USERNAME="user"
+
     
 # download and install cloud_sql_proxy
 RUN apt-get update && apt-get -y install net-tools wget && \
@@ -69,5 +84,13 @@ RUN apt-get update && apt-get -y install net-tools wget && \
 # custom entrypoint
 COPY wordpress/cloud-run-entrypoint.sh /usr/local/bin/
 
-ENTRYPOINT ["cloud-run-entrypoint.sh","docker-entrypoint.sh"]
-CMD ["nami", "start","apache2-foreground"]
+EXPOSE 8080
+# Use the PORT environment variable in Apache configuration files.
+RUN sed -i 's/80/${PORT}/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
+
+
+USER 1001
+ENTRYPOINT [ "/app-entrypoint.sh","cloud-run-entrypoint.sh","docker-entrypoint.sh" ]
+CMD [ "httpd", "-f", "/opt/bitnami/apache/conf/httpd.conf", "-DFOREGROUND" ]
+
+
